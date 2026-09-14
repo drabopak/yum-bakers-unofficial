@@ -1,0 +1,156 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-cream: var(--cream);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-tangerine: var(--tangerine);
+  --color-mahogany: var(--mahogany);
+  --color-mahogany-soft: var(--mahogany-soft);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-playfair), ui-serif, Georgia, serif;
+  --radius: 1rem;
+}
+
+:root {
+  color-scheme: light;
+  --background: #fffdf9;
+  --foreground: #4a2810;
+  --card: #ffffff;
+  --card-foreground: #4a2810;
+  --cream: #fffdf9;
+  --gold: #e09f3e;
+  --gold-soft: #f3d9a8;
+  --tangerine: #e4572e;
+  --mahogany: #4a2810;
+  --mahogany-soft: #7a5230;
+  --border: #f0e4d0;
+  --ring: #e09f3e;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    background-color: var(--cream);
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-serif;
+  }
+}
+
+/* Organic blob border radii for food imagery */
+.blob-1 {
+  border-radius: 63% 37% 54% 46% / 55% 48% 52% 45%;
+}
+.blob-2 {
+  border-radius: 41% 59% 43% 57% / 58% 42% 58% 42%;
+}
+.blob-3 {
+  border-radius: 50% 50% 33% 67% / 55% 44% 56% 45%;
+}
+
+/* Multi-layered soft drop shadow */
+.soft-shadow {
+  box-shadow: 0 20px 40px rgba(74, 40, 16, 0.08), 0 6px 14px rgba(74, 40, 16, 0.06);
+}
+.soft-shadow-lg {
+  box-shadow: 0 30px 60px rgba(74, 40, 16, 0.12), 0 10px 22px rgba(74, 40, 16, 0.08);
+}
+
+/* Perspective tilt card */
+.tilt-card {
+  perspective: 1000px;
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.45s ease;
+  transform-style: preserve-3d;
+}
+.tilt-card:hover {
+  transform: translateY(-10px) rotateX(6deg) rotateY(-6deg) scale(1.02);
+}
+
+/* Dual-layer gentle float */
+@keyframes float-a {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-16px) rotate(1deg);
+  }
+}
+@keyframes float-b {
+  0%,
+  100% {
+    transform: translateY(0) rotate(1deg);
+  }
+  50% {
+    transform: translateY(-24px) rotate(-1.5deg);
+  }
+}
+.float-a {
+  animation: float-a 6s ease-in-out infinite;
+}
+.float-b {
+  animation: float-b 8s ease-in-out infinite;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fade-up {
+  animation: fade-up 0.5s ease-out both;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 24px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+.toast-in {
+  animation: toast-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes cart-bump {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.35) rotate(-8deg);
+  }
+  70% {
+    transform: scale(0.92) rotate(4deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+.cart-bump {
+  animation: cart-bump 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}

@@ -1,0 +1,25 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+# Pins the Next.js Runtime version instead of relying on whatever Netlify
+# auto-installs, so behavior (including how it honors the headers below)
+# doesn't shift silently between deploys.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Long-lived, content-hashed build assets: safe to cache forever. Netlify
+# resolves overlapping header rules by taking the most specific path match,
+# so this takes precedence over the catch-all rule below for these files.
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Everything else (pages, RSC/data payloads, API routes): always revalidate
+# at the CDN edge so a new deploy is visible immediately on refresh instead
+# of a stale cached copy being served.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"

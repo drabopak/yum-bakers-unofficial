@@ -3,6 +3,8 @@ import type { Metadata, Viewport } from 'next'
 import { Playfair_Display, Poppins } from 'next/font/google'
 import { AuthProvider } from '@/context/auth-context'
 import { OrderStoreProvider } from '@/data/order-store'
+import { MenuStoreProvider } from '@/data/menu-store'
+import { PasskeyStoreProvider } from '@/data/passkey-store'
 import { CartProvider } from '@/components/cart/cart-context'
 import { CartDrawer } from '@/components/cart/cart-drawer'
 import './globals.css'
@@ -53,12 +55,16 @@ export default function RootLayout({
           change, which broke the "resume checkout after login" flow.
         */}
         <AuthProvider>
-          <OrderStoreProvider>
-            <CartProvider>
-              {children}
-              <CartDrawer />
-            </CartProvider>
-          </OrderStoreProvider>
+          <PasskeyStoreProvider>
+            <MenuStoreProvider>
+              <OrderStoreProvider>
+                <CartProvider>
+                  {children}
+                  <CartDrawer />
+                </CartProvider>
+              </OrderStoreProvider>
+            </MenuStoreProvider>
+          </PasskeyStoreProvider>
         </AuthProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

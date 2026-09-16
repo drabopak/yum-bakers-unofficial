@@ -2,28 +2,18 @@
 
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChefHat, Truck, ShieldCheck, AlertCircle, ArrowRight, Lock } from 'lucide-react'
+import { ChefHat, Truck, ShieldCheck, AlertCircle, ArrowRight, Lock, Loader2 } from 'lucide-react'
 import { setStaffRole } from '@/lib/session'
+import { supabase } from '@/lib/supabase-client'
+import type { StaffRole } from '@/lib/session'
 
-type StaffRoleId = 'chef' | 'delivery' | 'owner'
+type StaffRoleId = StaffRole
 
 const ROLE_TABS: { id: StaffRoleId; label: string; icon: typeof ChefHat }[] = [
   { id: 'chef', label: 'Chef', icon: ChefHat },
   { id: 'delivery', label: 'Delivery', icon: Truck },
   { id: 'owner', label: 'Owner', icon: ShieldCheck },
 ]
-
-const STAFF_USERNAMES: Record<StaffRoleId, string> = {
-  chef: 'chef',
-  delivery: 'delivery',
-  owner: 'owner',
-}
-
-const STAFF_PASSKEYS: Record<StaffRoleId, string> = {
-  chef: 'CHEF-1234',
-  delivery: 'DEL-1234',
-  owner: 'OWNER-1234',
-}
 
 const STAFF_ROUTES: Record<StaffRoleId, string> = {
   chef: '/chef',
@@ -46,26 +36,42 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 export default function StaffLoginPage() {
   const router = useRouter()
   const [activeRole, setActiveRole] = useState<StaffRoleId>('chef')
-  const [username, setUsername] = useState('')
   const [passkey, setPasskey] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
   const switchRole = (role: StaffRoleId) => {
     setActiveRole(role)
     setError(null)
-    setUsername('')
     setPasskey('')
   }
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (username.trim() !== STAFF_USERNAMES[activeRole] || passkey.trim() !== STAFF_PASSKEYS[activeRole]) {
-      setError('invalid key')
-      return
-    }
+    setLoading(true)
     setError(null)
-    setStaffRole(activeRole)
-    router.push(STAFF_ROUTES[activeRole])
+
+    try {
+      const { data, error: queryError } = await supabase
+        .from('staff_passkeys')
+        .select('id, label, passkey, is_active')
+        .eq('role', activeRole)
+        .eq('passkey', passkey.trim())
+        .eq('is_active', true)
+        .maybeSingle()
+
+      if (queryError || !data) {
+        setError('Invalid or inactive passkey')
+        setLoading(false)
+        return
+      }
+
+      setStaffRole(activeRole, (data as { label: string }).label)
+      router.push(STAFF_ROUTES[activeRole])
+    } catch {
+      setError('Could not verify passkey. Please try again.')
+      setLoading(false)
+    }
   }
 
   return (
@@ -108,16 +114,6 @@ export default function StaffLoginPage() {
           )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <Field label="Username">
-              <input
-                type="text"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder={STAFF_USERNAMES[activeRole]}
-                className={inputClass}
-              />
-            </Field>
             <Field label="Passkey">
               <input
                 type="password"
@@ -130,10 +126,20 @@ export default function StaffLoginPage() {
             </Field>
             <button
               type="submit"
-              className="mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-600 to-red-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-red-900/30 transition-transform hover:-translate-y-0.5"
+              disabled={loading}
+              className="mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-600 to-red-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-red-900/30 transition-transform hover:-translate-y-0.5 disabled:opacity-60"
             >
-              Enter {activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Dashboard
-              <ArrowRight className="h-4 w-4" />
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                <>
+                  Enter {activeRole.charAt(0).toUpperCase() + activeRole.slice(1)} Dashboard
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
             </button>
           </form>
         </div>

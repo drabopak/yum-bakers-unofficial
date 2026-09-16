@@ -3,6 +3,7 @@
 import { ChefHat, Flame, CheckCircle2 } from 'lucide-react'
 import { useOrderStore, type Order } from '@/data/order-store'
 import { useRoleGuard } from '@/hooks/use-role-guard'
+import { getStaffLabel } from '@/lib/session'
 import { StaffHeader } from '@/components/layout/staff-header'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { OrderItemsList } from '@/components/ui/order-items-list'
@@ -17,6 +18,7 @@ export default function ChefDashboardPage() {
 
   if (!authorized) return <CheckingAccess />
 
+  const staffLabel = getStaffLabel() ?? 'Chef'
   const kitchenOrders = orders
     .filter((order) => KITCHEN_STATUSES.includes(order.status))
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
@@ -41,13 +43,14 @@ export default function ChefDashboardPage() {
                   <th className="px-5 py-3">Items</th>
                   <th className="px-5 py-3">Time</th>
                   <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">Cooked By</th>
                   <th className="px-5 py-3">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-amber-100">
                 {kitchenOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-5 py-10 text-center text-sm text-stone-500">
+                    <td colSpan={6} className="px-5 py-10 text-center text-sm text-stone-500">
                       No active kitchen orders right now.
                     </td>
                   </tr>
@@ -64,11 +67,25 @@ export default function ChefDashboardPage() {
                       <td className="px-5 py-4">
                         <StatusBadge status={order.status} />
                       </td>
+                      <td className="px-5 py-4 text-sm text-stone-600">
+                        {order.preparedBy ? (
+                          <div>
+                            <p className="font-medium text-stone-700">{order.preparedBy}</p>
+                            {order.preparedAt && (
+                              <p className="text-xs text-stone-400">
+                                {formatOrderTime(order.preparedAt)}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-stone-400">—</span>
+                        )}
+                      </td>
                       <td className="px-5 py-4">
                         {order.status === 'Pending' && (
                           <button
                             type="button"
-                            onClick={() => updateOrderStatus(order.id, 'Preparing')}
+                            onClick={() => updateOrderStatus(order.id, 'Preparing', staffLabel)}
                             className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 hover:bg-amber-700"
                           >
                             <Flame className="h-4 w-4" />

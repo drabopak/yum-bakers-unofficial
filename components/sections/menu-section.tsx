@@ -2,13 +2,30 @@
 
 import { useState } from 'react'
 import { Plus, Check } from 'lucide-react'
-import { categories, type MenuItem } from '@/data/yum-data'
+import { useMenuStore, type MenuRow } from '@/data/menu-store'
 import { useCart, formatRs } from '@/components/cart/cart-context'
 import { playAdd, playTick } from '@/lib/sounds'
 
+const CATEGORY_META: Record<string, { label: string; tagline: string }> = {
+  cakes: { label: 'Customized Cakes', tagline: 'Baked fresh for every happy moment' },
+  mithai: { label: 'Mithai & Sweets', tagline: 'Traditional desi mithai, made pure' },
+  chicken: { label: 'Crispy Fried Chicken', tagline: 'Hot, crunchy and freshly fried' },
+  dairy: { label: 'Fresh Dairy & Honey', tagline: 'Pure refreshments from our farm counter' },
+}
+
+const CATEGORY_ORDER = ['cakes', 'mithai', 'chicken', 'dairy']
+
 export function MenuSection() {
-  const [active, setActive] = useState(categories[0].id)
-  const activeCategory = categories.find((c) => c.id === active) ?? categories[0]
+  const { items, loading } = useMenuStore()
+  const [active, setActive] = useState('cakes')
+
+  const availableItems = items.filter((item) => item.is_available)
+  const categoriesWithData = CATEGORY_ORDER.filter((cat) =>
+    availableItems.some((item) => item.category === cat),
+  )
+  const activeCategory = categoriesWithData.includes(active) ? active : categoriesWithData[0] ?? 'cakes'
+  const activeItems = availableItems.filter((item) => item.category === activeCategory)
+  const meta = CATEGORY_META[activeCategory] ?? { label: activeCategory, tagline: '' }
 
   return (
     <section id="menu" className="mx-auto max-w-7xl scroll-mt-20 px-4 py-16 sm:px-6 md:py-24">
@@ -26,14 +43,14 @@ export function MenuSection() {
 
       {/* Category tabs */}
       <div className="mt-10 flex flex-wrap justify-center gap-3">
-        {categories.map((cat) => {
-          const isActive = cat.id === active
+        {CATEGORY_ORDER.map((catId) => {
+          const isActive = catId === activeCategory
           return (
             <button
-              key={cat.id}
+              key={catId}
               type="button"
               onClick={() => {
-                setActive(cat.id)
+                setActive(catId)
                 playTick()
               }}
               aria-pressed={isActive}
@@ -43,35 +60,51 @@ export function MenuSection() {
                   : 'border border-border bg-card text-mahogany hover:border-gold hover:text-tangerine'
               }`}
             >
-              {cat.label}
+              {CATEGORY_META[catId]?.label ?? catId}
             </button>
           )
         })}
       </div>
 
       <p className="mt-6 text-center font-serif text-lg italic text-mahogany-soft">
-        {activeCategory.tagline}
+        {meta.tagline}
       </p>
 
       {/* Grid */}
       <div
-        key={activeCategory.id}
+        key={activeCategory}
         className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
       >
-        {activeCategory.items.map((item, i) => (
-          <MenuCard key={item.id} item={item} index={i} />
-        ))}
+        {loading ? (
+          <div className="col-span-full py-16 text-center text-sm text-mahogany-soft">
+            Loading menu...
+          </div>
+        ) : activeItems.length === 0 ? (
+          <div className="col-span-full py-16 text-center text-sm text-mahogany-soft">
+            No items available in this category right now.
+          </div>
+        ) : (
+          activeItems.map((item, i) => (
+            <MenuCard key={item.id} item={item} index={i} />
+          ))
+        )}
       </div>
     </section>
   )
 }
 
-function MenuCard({ item, index }: { item: MenuItem; index: number }) {
+function MenuCard({ item, index }: { item: MenuRow; index: number }) {
   const { add } = useCart()
   const [added, setAdded] = useState(false)
 
   const handleAdd = () => {
-    add(item)
+    add({
+      id: item.id,
+      name: item.name,
+      description: item.description,
+      price: item.price,
+      image: item.image,
+    })
     playAdd()
     setAdded(true)
     setTimeout(() => setAdded(false), 1200)

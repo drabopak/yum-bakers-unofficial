@@ -31,6 +31,10 @@ export type Order = {
   totalAmount: number
   status: OrderStatus
   createdAt: string
+  preparedBy: string | null
+  preparedAt: string | null
+  deliveredBy: string | null
+  deliveredAt: string | null
 }
 
 export type NewOrderInput = {
@@ -39,7 +43,6 @@ export type NewOrderInput = {
   items: OrderItem[]
 }
 
-// Shape of a row exactly as it comes back from Postgres (snake_case columns).
 type OrderRow = {
   id: string
   customer_phone: string
@@ -48,6 +51,10 @@ type OrderRow = {
   total_amount: number
   status: OrderStatus
   created_at: string
+  prepared_by: string | null
+  prepared_at: string | null
+  delivered_by: string | null
+  delivered_at: string | null
 }
 
 function rowToOrder(row: OrderRow): Order {
@@ -59,6 +66,10 @@ function rowToOrder(row: OrderRow): Order {
     totalAmount: row.total_amount,
     status: row.status,
     createdAt: row.created_at,
+    preparedBy: row.prepared_by ?? null,
+    preparedAt: row.prepared_at ?? null,
+    deliveredBy: row.delivered_by ?? null,
+    deliveredAt: row.delivered_at ?? null,
   }
 }
 
@@ -75,7 +86,9 @@ export type ConnectionStatus = 'connecting' | 'live' | 'offline'
 type OrderStoreValue = {
   orders: Order[]
   addOrder: (input: NewOrderInput) => Order
-  updateOrderStatus: (id: string, status: OrderStatus) => void
+  updateOrderStatus: (id: string, status: OrderStatus, staffLabel?: string) => void
+  deleteOrder: (id: string) => void
+  clearDeliveredOrders: () => void
   getOrder: (id: string) => Order | undefined
   connectionStatus: ConnectionStatus
 }
@@ -83,18 +96,11 @@ type OrderStoreValue = {
 const OrderStoreContext = createContext<OrderStoreValue | null>(null)
 
 export function OrderStoreProvider({ children }: { children: ReactNode }) {
-  // No mock/seed data: every order comes from a real customer checkout or,
-  // once Supabase is configured, from the initial fetch + realtime stream
-  // below. A fresh environment genuinely starts empty.
   const [orders, setOrders] = useState<Order[]>([])
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
     isSupabaseConfigured ? 'connecting' : 'offline',
   )
 
-  // Lets addOrder/updateOrderStatus read the latest orders without needing
-  // `orders` in their own useCallback dependency array (which would change
-  // their identity — and every consumer's effects — on every single order
-  // update).
   const ordersRef = useRef<Order[]>([])
   ordersRef.current = orders
 
@@ -110,16 +116,12 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  // Initial fetch + live subscription. This is the whole multi-device sync
-  // story: any browser/device with this provider mounted opens the same
-  // Supabase Realtime channel, so an INSERT from a customer's checkout on
-  // one machine and an UPDATE from a chef's "Start Cooking" tap on another
-  // both broadcast here and update local state immediately.
+  const removeOrder = useCallback((id: string) => {
+    setOrders((prev) => prev.filter((order) => order.id !== id))
+  }, [])
+
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
-      // No Supabase project configured — the store still works, but only
-      // for the current browser tab/session. See lib/supabase-client.ts and
-      // supabase/schema.sql to wire up real cross-device sync.
       setConnectionStatus('offline')
       return
     }
@@ -161,6 +163,13 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
           mergeOrder(rowToOrder(payload.new as OrderRow))
         },
       )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'orders' },
+        (payload) => {
+          removeOrder((payload.old as { id: string }).id)
+        },
+      )
       .subscribe((status) => {
         if (!active) return
         if (status === 'SUBSCRIBED') {
@@ -174,7 +183,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       active = false
       if (channel) supabase!.removeChannel(channel)
     }
-  }, [mergeOrder])
+  }, [mergeOrder, removeOrder])
 
   const addOrder = useCallback(
     (input: NewOrderInput): Order => {
@@ -186,12 +195,12 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
         totalAmount: calcTotal(input.items),
         status: 'Pending',
         createdAt: new Date().toISOString(),
+        preparedBy: null,
+        preparedAt: null,
+        deliveredBy: null,
+        deliveredAt: null,
       }
 
-      // Optimistic local update: the placing device sees it instantly,
-      // regardless of Supabase round-trip time. Other devices get it a
-      // moment later via the realtime INSERT event above, which is a no-op
-      // merge here since the id already matches.
       mergeOrder(order)
 
       if (isSupabaseConfigured && supabase) {
@@ -217,16 +226,38 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
   )
 
   const updateOrderStatus = useCallback(
-    (id: string, status: OrderStatus) => {
+    (id: string, status: OrderStatus, staffLabel?: string) => {
       const existing = ordersRef.current.find((order) => order.id === id)
       if (existing) {
-        mergeOrder({ ...existing, status })
+        const now = new Date().toISOString()
+        const patch: Partial<Order> = { status }
+
+        if (status === 'Preparing' && staffLabel) {
+          patch.preparedBy = staffLabel
+          patch.preparedAt = now
+        }
+        if (status === 'Delivered' && staffLabel) {
+          patch.deliveredBy = staffLabel
+          patch.deliveredAt = now
+        }
+
+        mergeOrder({ ...existing, ...patch })
       }
 
       if (isSupabaseConfigured && supabase) {
+        const update: Record<string, unknown> = { status }
+        if (status === 'Preparing' && staffLabel) {
+          update.prepared_by = staffLabel
+          update.prepared_at = new Date().toISOString()
+        }
+        if (status === 'Delivered' && staffLabel) {
+          update.delivered_by = staffLabel
+          update.delivered_at = new Date().toISOString()
+        }
+
         supabase
           .from('orders')
-          .update({ status })
+          .update(update)
           .eq('id', id)
           .then(({ error }) => {
             if (error) console.error('[order-store] failed to update order status:', error.message)
@@ -236,11 +267,53 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
     [mergeOrder],
   )
 
+  const deleteOrder = useCallback(
+    (id: string) => {
+      removeOrder(id)
+
+      if (isSupabaseConfigured && supabase) {
+        supabase
+          .from('orders')
+          .delete()
+          .eq('id', id)
+          .then(({ error }) => {
+            if (error) console.error('[order-store] failed to delete order:', error.message)
+          })
+      }
+    },
+    [removeOrder],
+  )
+
+  const clearDeliveredOrders = useCallback(() => {
+    const delivered = ordersRef.current.filter((order) => order.status === 'Delivered')
+    setOrders((prev) => prev.filter((order) => order.status !== 'Delivered'))
+
+    if (isSupabaseConfigured && supabase) {
+      delivered.forEach((order) => {
+        supabase
+          .from('orders')
+          .delete()
+          .eq('id', order.id)
+          .then(({ error }) => {
+            if (error) console.error('[order-store] failed to delete order:', error.message)
+          })
+      })
+    }
+  }, [])
+
   const getOrder = useCallback((id: string) => orders.find((order) => order.id === id), [orders])
 
   const value = useMemo<OrderStoreValue>(
-    () => ({ orders, addOrder, updateOrderStatus, getOrder, connectionStatus }),
-    [orders, addOrder, updateOrderStatus, getOrder, connectionStatus],
+    () => ({
+      orders,
+      addOrder,
+      updateOrderStatus,
+      deleteOrder,
+      clearDeliveredOrders,
+      getOrder,
+      connectionStatus,
+    }),
+    [orders, addOrder, updateOrderStatus, deleteOrder, clearDeliveredOrders, getOrder, connectionStatus],
   )
 
   return <OrderStoreContext.Provider value={value}>{children}</OrderStoreContext.Provider>

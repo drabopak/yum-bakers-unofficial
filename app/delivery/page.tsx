@@ -3,14 +3,14 @@
 import { Truck, Banknote } from 'lucide-react'
 import { useOrderStore, type Order } from '@/data/order-store'
 import { useRoleGuard } from '@/hooks/use-role-guard'
+import { getStaffLabel } from '@/lib/session'
 import { StaffHeader } from '@/components/layout/staff-header'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { OrderItemsList } from '@/components/ui/order-items-list'
 import { CheckingAccess } from '@/components/ui/checking-access'
 import { formatRs } from '@/components/cart/cart-context'
+import { formatOrderTime } from '@/lib/order-status'
 
-// Both "Ready" (awaiting pickup) and "Out for Delivery" (already picked up)
-// stay on this dashboard, since delivery staff need to action both stages.
 const DELIVERY_STATUSES: Order['status'][] = ['Ready', 'Out for Delivery']
 
 export default function DeliveryDashboardPage() {
@@ -19,6 +19,7 @@ export default function DeliveryDashboardPage() {
 
   if (!authorized) return <CheckingAccess />
 
+  const staffLabel = getStaffLabel() ?? 'Delivery'
   const deliveryOrders = orders
     .filter((order) => DELIVERY_STATUSES.includes(order.status))
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
@@ -36,7 +37,7 @@ export default function DeliveryDashboardPage() {
 
         <div className="mt-8 overflow-hidden rounded-2xl border border-amber-100 bg-white shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left">
+            <table className="w-full min-w-[820px] text-left">
               <thead>
                 <tr className="border-b border-amber-100 bg-amber-50/70 text-xs font-semibold uppercase tracking-wide text-amber-800">
                   <th className="px-5 py-3">Order ID</th>
@@ -44,13 +45,14 @@ export default function DeliveryDashboardPage() {
                   <th className="px-5 py-3">Items</th>
                   <th className="px-5 py-3">Total</th>
                   <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">Delivered By</th>
                   <th className="px-5 py-3">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-amber-100">
                 {deliveryOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-10 text-center text-sm text-stone-500">
+                    <td colSpan={7} className="px-5 py-10 text-center text-sm text-stone-500">
                       No orders ready for delivery right now.
                     </td>
                   </tr>
@@ -71,6 +73,20 @@ export default function DeliveryDashboardPage() {
                       <td className="px-5 py-4">
                         <StatusBadge status={order.status} />
                       </td>
+                      <td className="px-5 py-4 text-sm text-stone-600">
+                        {order.deliveredBy ? (
+                          <div>
+                            <p className="font-medium text-stone-700">{order.deliveredBy}</p>
+                            {order.deliveredAt && (
+                              <p className="text-xs text-stone-400">
+                                {formatOrderTime(order.deliveredAt)}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-stone-400">—</span>
+                        )}
+                      </td>
                       <td className="px-5 py-4">
                         {order.status === 'Ready' && (
                           <button
@@ -85,7 +101,7 @@ export default function DeliveryDashboardPage() {
                         {order.status === 'Out for Delivery' && (
                           <button
                             type="button"
-                            onClick={() => updateOrderStatus(order.id, 'Delivered')}
+                            onClick={() => updateOrderStatus(order.id, 'Delivered', staffLabel)}
                             className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 hover:bg-emerald-700"
                           >
                             <Banknote className="h-4 w-4" />
